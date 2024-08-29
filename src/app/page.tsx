@@ -15,8 +15,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useTheme } from "next-themes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import dynamic from 'next/dynamic';
 
 interface Person {
   name: string;
@@ -122,11 +122,18 @@ const BillSplittingApp: React.FC = () => {
   const [quickSplitCount, setQuickSplitCount] = useState<number>(2);
   const [splitResult, setSplitResult] = useState<Person[]>([]);
   const [activeTab, setActiveTab] = useState<"manual" | "quick">("quick");
-  const [language, setLanguage] = useState<string>(() => {
-    return localStorage.getItem('preferredLanguage') || 'en';
-  });
+  const [language, setLanguage] = useState<string>('en');
+
+  useEffect(() => {
+    const storedLanguage = localStorage.getItem('preferredLanguage');
+    if (storedLanguage) {
+      setLanguage(storedLanguage);
+    }
+  }, []);
 
   const strings = languageStrings[language as keyof typeof languageStrings];
+
+
 
   const addPerson = () => {
     if (newPersonName.trim() !== '') {
