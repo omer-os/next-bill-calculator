@@ -1,13 +1,13 @@
 "use client"
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, MinusCircle, Shuffle, DollarSign, Users, Menu, Sun, Moon } from 'lucide-react';
+import { PlusCircle, MinusCircle, Shuffle, DollarSign, Users, Menu, Sun, Moon, X } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerTrigger } from "@/components/ui/drawer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useTheme } from "next-themes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
 
 interface Person {
   name: string;
@@ -42,7 +43,7 @@ const languageStrings = {
     peopleList: "People List",
   },
   ar: {
-    title: "تطبيق تقسيم الفاتورة",
+    title: "تطبيق تقسيم افاتورة",
     manualSplit: "تقسيم يدوي",
     quickSplit: "تقسيم سريع",
     totalBill: "إجمالي الفاتورة (دينار عراقي)",
@@ -121,7 +122,9 @@ const BillSplittingApp: React.FC = () => {
   const [quickSplitCount, setQuickSplitCount] = useState<number>(2);
   const [splitResult, setSplitResult] = useState<Person[]>([]);
   const [activeTab, setActiveTab] = useState<"manual" | "quick">("quick");
-  const [language, setLanguage] = useState<string>("ar");
+  const [language, setLanguage] = useState<string>(() => {
+    return localStorage.getItem('preferredLanguage') || 'en';
+  });
 
   const strings = languageStrings[language as keyof typeof languageStrings];
 
@@ -205,154 +208,217 @@ const BillSplittingApp: React.FC = () => {
       ))}
     </ScrollArea>
   );
+  const renderPersonBadges = (personList: Person[], onRemove: (index: number) => void) => (
+    <div className="flex flex-wrap gap-2 mt-4">
+      {personList.map((person, index) => (
+        <Badge key={index} variant="secondary" className="py-1 px-2 flex items-center space-x-1">
+          <span>{person.name}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(index)}
+            className="h-4 w-4 p-0 hover:bg-transparent"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </Badge>
+      ))}
+    </div>
+  );
+
   const renderResultDialog = () => (
     <Dialog>
       <DialogTrigger asChild>
         <Button
           onClick={splitBill}
-          className="w-full"
           disabled={!totalBill || (activeTab === "manual" && people.length === 0)}
+          className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          <Shuffle className="mr-2 h-5 w-5" /> {strings.splitBill}
+          <Shuffle className="h-5 w-5" /> {strings.splitBill}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] ">
         <DialogHeader>
-          <DialogTitle>{strings.splitResult}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold text-center">{strings.splitResult}</DialogTitle>
         </DialogHeader>
-        <div className="mt-4">
-          {renderPersonList(splitResult)}
-          <div className="mt-4 text-sm text-muted-foreground">
-            {strings.total}: {formatCurrency(splitResult.reduce((sum, person) => sum + person.amount, 0))} IQD
+        <div className="mt-6 space-y-4">
+          <div className="bg-muted p-4 rounded-lg">
+            <div className="text-lg font-semibold mb-2">{strings.totalBill}</div>
+            <div className="text-3xl font-bold text-primary">{formatCurrency(parseFloat(totalBill))} IQD</div>
+          </div>
+          <div className="space-y-3 max-h-[30vh] overflow-y-auto">
+            {splitResult.map((person, index) => (
+              <div key={index} className="flex items-center justify-between bg-card p-3 rounded-md shadow-sm">
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {person.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="font-medium">{person.name}</span>
+                </div>
+                <span className="font-semibold text-primary">{formatCurrency(person.amount)} IQD</span>
+              </div>
+            ))}
+          </div>
+          <Separator />
+          <div className="flex justify-between items-center text-lg font-semibold">
+            <span>{strings.total}</span>
+            <span className="text-primary">
+              {formatCurrency(splitResult.reduce((sum, person) => sum + person.amount, 0))} IQD
+            </span>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 
+  const formatNumber = (num: string): string => {
+    return num.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
+  const unformatNumber = (num: string): string => {
+    return num.replace(/,/g, "");
+  };
+
+  const handleTotalBillChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = unformatNumber(e.target.value);
+    if (value === '' || /^\d+$/.test(value)) {
+      setTotalBill(value);
+    }
+  };
+
+  useEffect(() => {
+    localStorage.setItem('preferredLanguage', language);
+  }, [language]);
+
+  const handleLanguageChange = (newLanguage: string) => {
+    setLanguage(newLanguage);
+  };
+
   return (
-    <div className="flex h-screen bg-background text-foreground" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="flex h-lvh bg-background text-foreground" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="flex-1 flex flex-col">
-        <Navbar language={language} setLanguage={setLanguage} />
+        <Navbar language={language} setLanguage={handleLanguageChange} />
         <main className="flex-1 p-6 overflow-auto">
-          <Card>
-            <CardContent className="p-6">
-              <h1 className="text-2xl font-bold mb-6">{strings.title}</h1>
-              <Tabs defaultValue="manual" className="w-full" onValueChange={(value) => setActiveTab(value as "manual" | "quick")}>
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="manual">{strings.manualSplit}</TabsTrigger>
-                  <TabsTrigger value="quick">{strings.quickSplit}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="manual">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="totalBill" className="text-lg font-medium">{strings.totalBill}</Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="totalBill"
-                          type="number"
-                          min="0"
-                          step="250"
-                          value={totalBill}
-                          onChange={(e) => setTotalBill(e.target.value)}
-                          className="pl-10"
-                          placeholder={strings.totalBill}
-                        />
-                      </div>
+          <CardContent className="p-0">
+            <Tabs defaultValue="quick" className="w-full" onValueChange={(value) => setActiveTab(value as "manual" | "quick")}>
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="quick">{strings.quickSplit}</TabsTrigger>
+                <TabsTrigger value="manual">{strings.manualSplit}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="manual">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="totalBill" className="text-lg font-medium">{strings.totalBill}</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute w-4 h-4 left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="totalBill"
+                        type="text"
+                        value={formatNumber(totalBill)}
+                        onChange={handleTotalBillChange}
+                        className="ps-8"
+                        placeholder={strings.totalBill}
+                      />
                     </div>
-                    <Drawer>
-                      <DrawerTrigger asChild>
-                        <Button className="w-full">
-                          <PlusCircle className="mr-2 h-4 w-4" /> {strings.addPerson}
-                        </Button>
-                      </DrawerTrigger>
-                      <DrawerContent>
-                        <DrawerHeader>
-                          <DrawerTitle>{strings.addPerson}</DrawerTitle>
-                        </DrawerHeader>
-                        <div className="p-4 space-y-4">
-                          <div className="flex items-center space-x-4">
-                            <Avatar className="h-12 w-12">
-                              <AvatarFallback className="bg-primary text-primary-foreground text-lg">
-                                {newPersonName.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <Label htmlFor="name" className="text-sm font-medium">
-                                {strings.name}
-                              </Label>
-                              <Input
-                                id="name"
-                                value={newPersonName}
-                                onChange={(e) => setNewPersonName(e.target.value)}
-                                className="mt-1"
-                                placeholder={strings.enterName}
-                              />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-full flex gap-2">
+                      <Drawer>
+                        <DrawerTrigger asChild>
+                          <Button className='flex-1' variant="outline">
+                            <PlusCircle className="h-4 w-4 mr-2" /> {strings.addPerson}
+                          </Button>
+                        </DrawerTrigger>
+                        <DrawerContent>
+                          <DrawerHeader>
+                            <DrawerTitle>{strings.addPerson}</DrawerTitle>
+                          </DrawerHeader>
+                          <div className="p-4 space-y-4">
+                            <div className="flex items-center space-x-4">
+                              <Avatar className="h-12 w-12">
+                                <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+                                  {newPersonName.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <Label htmlFor="name" className="text-sm font-medium">
+                                  {strings.name}
+                                </Label>
+                                <Input
+                                  id="name"
+                                  value={newPersonName}
+                                  onChange={(e) => setNewPersonName(e.target.value)}
+                                  className="mt-1"
+                                  placeholder={strings.enterName}
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <DrawerFooter>
-                          <Button onClick={addPerson} className="w-full">{strings.add}</Button>
-                        </DrawerFooter>
-                      </DrawerContent>
-                    </Drawer>
-                    {people.length > 0 && (
-                      <div className="mt-4">
-                        <Accordion type="single" collapsible>
-                          <AccordionItem value="people-list">
-                            <AccordionTrigger>
-                              {strings.peopleSplit}
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              {renderPersonList(people, removePerson)}
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      </div>
-                    )}
+                          <DrawerFooter>
+                            <Button onClick={addPerson} className="w-full">{strings.add}</Button>
+                          </DrawerFooter>
+                        </DrawerContent>
+                      </Drawer>
+                      {renderResultDialog()}
+                    </div>
+                  </div>
+                  {people.length > 0 && renderPersonBadges(people, removePerson)}
+                </div>
+              </TabsContent>
+              <TabsContent value="quick">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="quickTotalBill" className="text-lg font-medium">{strings.totalBill}</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute w-4 h-4 left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="quickTotalBill"
+                        type="text"
+                        value={formatNumber(totalBill)}
+                        onChange={handleTotalBillChange}
+                        className="ps-8"
+                        placeholder={strings.totalBill}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quickSplitCount" className="text-lg font-medium">{strings.numPeople}</Label>
+                    <div className="relative">
+                      <Users className="absolute w-4 h-4 left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="quickSplitCount"
+                        type="number"
+                        min="2"
+                        value={quickSplitCount === 0 ? '' : quickSplitCount}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            setQuickSplitCount(0);
+                          } else {
+                            const numValue = parseInt(value);
+                            setQuickSplitCount(isNaN(numValue) ? 0 : numValue);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (quickSplitCount < 2) {
+                            setQuickSplitCount(2);
+                          }
+                        }}
+                        className="ps-8"
+                        placeholder={strings.numPeople}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex">
                     {renderResultDialog()}
                   </div>
-                </TabsContent>
-                <TabsContent value="quick">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="quickTotalBill" className="text-lg font-medium">{strings.totalBill}</Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="quickTotalBill"
-                          type="number"
-                          min="0"
-                          step="250"
-                          value={totalBill}
-                          onChange={(e) => setTotalBill(e.target.value)}
-                          className="pl-10"
-                          placeholder={strings.totalBill}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="quickSplitCount" className="text-lg font-medium">{strings.numPeople}</Label>
-                      <div className="relative">
-                        <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="quickSplitCount"
-                          type="number"
-                          min="2"
-                          value={quickSplitCount}
-                          onChange={(e) => setQuickSplitCount(Math.max(2, parseInt(e.target.value) || 2))}
-                          className="pl-10"
-                          placeholder={strings.numPeople}
-                        />
-                      </div>
-                    </div>
-                    {renderResultDialog()}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+
         </main>
       </div>
     </div>
