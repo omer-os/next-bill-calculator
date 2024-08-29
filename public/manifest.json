@@ -1,0 +1,31 @@
+{
+
+"theme_color": "#000000",
+"background_color": "#ffffff",
+
+"orientation": "portrait",
+"display": "standalone",
+"dir": "auto",
+"lang": "en-US",
+"name": "Bill Calculator",
+"short_name": "Billy",
+"start_url": "https://billy-cl.vercel.app/",
+"scope": "https://billy-cl.vercel.app/",
+"description": "Bill splitting application",
+"id": "https://billy-cl.vercel.app/",
+"icons": [
+    {
+    "purpose": "maskable",
+    "sizes": "512x512",
+    "src": "icons/icon512_maskable.png",
+    "type": "image/png"
+    },
+    {
+    "purpose": "any",
+    "sizes": "512x512",
+    "src": "icons/icon512_rounded.png",
+    "type": "image/png"
+    }
+],
+"splash_pages": null
+}
